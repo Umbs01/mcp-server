@@ -48,6 +48,16 @@ class McpConfig(storage: PersistedObject, private val logging: Logging) {
                 notifyTargetsChanged()
             }
         }
+    
+    private var _filterConfigCredentials by storage.boolean(true)
+    var filterConfigCredentials: Boolean
+        get() = _filterConfigCredentials
+        set(value) {
+            if (_filterConfigCredentials != value) {
+                _filterConfigCredentials = value
+                notifyTargetsChanged()
+            }
+        }
 
     fun addAutoApproveTarget(target: String): Boolean {
         val currentTargets = getAutoApproveTargetsList()
