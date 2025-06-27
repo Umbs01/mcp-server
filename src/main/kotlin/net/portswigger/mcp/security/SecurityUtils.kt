@@ -10,7 +10,6 @@ data class SecurityConfig(
     val user_options: Map<String, Map<String, JsonElement>>
 )
 
-
 /**
  * Finds the Burp Suite main frame or the largest available frame as fallback
  */
@@ -28,24 +27,13 @@ fun findBurpFrame(): Frame? {
         .maxByOrNull { it.width * it.height }
 }
 
-fun filterConfigCredentials(config: McpConfig, json: String): String {
-    if (config.filterConfigCredentials == false) {
-        return json
-    }
+fun filterConfigCredentials(json: String): String {
     try {
-        val jsonElement = Json.parseToJsonElement(json)
-        val filteredElement = filterCredentials(jsonElement)
+        val jsonObj = Json.parseToJsonElement(json).jsonObject
+        val filteredElement = filterJsonObject(jsonObj)
         return Json.encodeToString(filteredElement) 
     } catch (e: Exception) {
         return json
-    }
-}
-
-fun filterCredentials(root: JsonElement): JsonElement {
-    return when (root) {
-        is JsonObject -> filterJsonObject(root)
-        is JsonArray -> filterJsonArray(root)
-        else -> root
     }
 }
 
@@ -77,13 +65,8 @@ fun filterJsonArray(array: JsonArray): JsonArray {
 
 fun isCredential(key: String): Boolean {
     val credentialKeywords = listOf(
-        "host",
         "password",
-        "username",
-        "port",
-        "credentials",
-        "keys",
-        "browser_data_directory",
+        "username"
     )
     return credentialKeywords.any { keyword ->
         key.lowercase().contains(keyword)
