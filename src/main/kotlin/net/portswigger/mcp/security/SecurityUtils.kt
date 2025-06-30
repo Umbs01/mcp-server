@@ -6,13 +6,34 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 @Serializable
-data class SecurityConfig(
-    val user_options: Map<String, Map<String, JsonElement>>
+data class UserOptionsWrapper (
+    var user_options: UserOptions
 )
 
-private const val USER_OPTIONS = "user_options"
-private const val PROJECT_OPTIONS = "project_options"
-private const val CONNECTIONS = "connections"
+@Serializable
+data class UserOptions (
+    var bchecks: JsonObject,
+    var connections: JsonObject,
+    var display: JsonObject,
+    var extender: JsonObject,
+    var intruder: JsonObject,
+    var misc: JsonObject,
+    var proxy: JsonObject,
+    var repeater: JsonObject,
+    var ssl: JsonObject
+)
+
+@Serializable
+data class ProjectOptions (
+    var bambda: JsonObject,
+    var logger: JsonObject,
+    var organiser: JsonObject,
+    var project_options: JsonObject,
+    var proxy: JsonObject,
+    var repeater: JsonObject,
+    var sequencer: JsonObject,
+    var target: JsonObject
+)
 
 /**
  * Finds the Burp Suite main frame or the largest available frame as fallback
@@ -32,55 +53,68 @@ fun findBurpFrame(): Frame? {
 }
 
 fun filterUserConfigCredentials(jsonString: String): String {
-    return filterConfigCredentials(jsonString, USER_OPTIONS)
-}
-
-fun filterProjectConfigCredentials(jsonString: String): String {
-    return filterConfigCredentials(jsonString, PROJECT_OPTIONS)
-}
-
-private fun filterConfigCredentials(jsonString: String, optionsKey: String): String {
-    return try {
-        val json = Json.parseToJsonElement(jsonString).jsonObject
-        val options = json[optionsKey]?.jsonObject ?: return jsonString
-        val connections = options[CONNECTIONS]?.jsonObject ?: return jsonString
+    try {
+        var wrapper = Json.decodeFromString<UserOptionsWrapper>(jsonString)
+        var user_options = wrapper.user_options
         
-        val filteredConnections = connections.mapValues { (key, value) ->
+        user_options.connections = JsonObject(user_options.connections.mapValues { (key, value) ->
             when (key) {
                 "platform_authentication" -> filterPlatformAuth(value)
                 "socks_proxy" -> filterSocksProxy(value)
                 else -> value
             }
+        })
+        return Json.encodeToString(UserOptionsWrapper(user_options))
+        
+    } catch (e: Exception) {
+        return jsonString
+    }
+}
+
+fun filterProjectConfigCredentials(jsonString: String): String {
+    try {
+        var project_config = Json.decodeFromString<ProjectOptions>(jsonString)
+        val connections = project_config.project_options["connections"]?.jsonObject
+
+        if (connections != null) {
+            val filtered = JsonObject(connections.mapValues { (key, value) ->
+                when (key) {
+                    "platform_authentication" -> filterPlatformAuth(value)
+                    "socks_proxy" -> filterSocksProxy(value)
+                    else -> value
+                }
+            })
+            
+            project_config.project_options = JsonObject(
+                project_config.project_options.toMutableMap().apply {
+                    this["connections"] = filtered
+                }
+            )
         }
         
-        val updatedJson = json.toMutableMap()
-        val updatedOptions = options.toMutableMap()
-        updatedOptions[CONNECTIONS] = JsonObject(filteredConnections)
-        updatedJson[optionsKey] = JsonObject(updatedOptions)
-        
-        Json.encodeToString(JsonObject(updatedJson))
+        return Json.encodeToString(project_config)
     } catch (e: Exception) {
-        jsonString
+        return jsonString
     }
 }
 
 private fun filterPlatformAuth(value: JsonElement): JsonElement {
     val obj = value.jsonObject
-    val credentials = obj["credentials"]?.jsonArray ?: return value
+    val credentials = obj["credentials"]?.jsonArray
 
-    val filteredCredentials = credentials.map { credentialElement ->
+    val filteredCredentials = credentials?.map { credentialElement ->
         val credentialObj = credentialElement.jsonObject
         JsonObject(
             credentialObj.mapValues { (key, value) ->
                 when (key) {
-                    "username", "password" -> JsonPrimitive("*****")
+                    "password" -> JsonPrimitive("*****")
                     else -> value
                 }
             }
         )
     }
     return JsonObject(obj.toMutableMap().apply {
-        this["credentials"] = JsonArray(filteredCredentials)
+        this["credentials"] = JsonArray(filteredCredentials ?: emptyList())
     })
 }
 
@@ -89,7 +123,7 @@ private fun filterSocksProxy(value: JsonElement): JsonElement {
     return JsonObject(
         obj.mapValues { (key, value) ->
             when (key) {
-                "username", "password" -> JsonPrimitive("*****")
+                "password" -> JsonPrimitive("*****")
                 else -> value
             }
         }
