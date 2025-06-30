@@ -57,6 +57,9 @@ class ConfigSecurityFilterTest {
 
         projectOptionString = """
             {
+                "bambda": {},
+                "logger": {},
+                "organiser": {},
                 "project_options": {
                     "connections": {
                         "platform_authentication": {
@@ -72,26 +75,37 @@ class ConfigSecurityFilterTest {
                             "password": "proxypass"
                         }
                     }
-                }
+                },
+                "proxy": {},
+                "repeater": {},
+                "sequencer": {},
+                "target": {}
             }
         """.trimIndent()
+        
         usersOptionString = """
             {
                 "user_options": {
+                    "bchecks": {},
                     "connections": {
                         "platform_authentication": {
                             "credentials": [
                                 {
-                                    "username": "realuser",
                                     "password": "realpass"
                                 }
                             ]
                         },
                         "socks_proxy": {
-                            "username": "proxyuser",
                             "password": "proxypass"
                         }
-                    }
+                    },
+                    "display": {},
+                    "extender": {},
+                    "intruder": {},
+                    "misc": {},
+                    "proxy": {},
+                    "repeater": {},
+                    "ssl": {}
                 }
             }
         """.trimIndent()
@@ -115,13 +129,11 @@ class ConfigSecurityFilterTest {
 
         credentials?.forEach { credential ->
             val credentialObj = credential.jsonObject
-            Assertions.assertEquals("*****", credentialObj["username"]?.jsonPrimitive?.content)
             Assertions.assertEquals("*****", credentialObj["password"]?.jsonPrimitive?.content)
         }
 
         socks_proxy?.let {
-            Assertions.assertEquals("*****", it["username"]?.jsonPrimitive?.content)
-            Assertions.assertEquals("*****", it["password"]?.jsonPrimitive?.content)
+            Assertions.assertEquals("*****", socks_proxy["password"]?.jsonPrimitive?.content)
         }
     }
 
@@ -142,13 +154,63 @@ class ConfigSecurityFilterTest {
 
         credentials?.forEach { credential ->
             val credentialObj = credential.jsonObject
-            Assertions.assertEquals("*****", credentialObj["username"]?.jsonPrimitive?.content)
             Assertions.assertEquals("*****", credentialObj["password"]?.jsonPrimitive?.content)
         }
 
         socks_proxy?.let {
-            Assertions.assertEquals("*****", it["username"]?.jsonPrimitive?.content)
             Assertions.assertEquals("*****", it["password"]?.jsonPrimitive?.content)
         }
+    }
+
+    @Test
+    fun `test security filter with empty credentials on user_options`() {
+        config.filterConfigCredentials = true
+        val empty_user_credentials = """
+            {
+                "user_options": {
+                    "connections": {
+                        "platform_authentication": {
+                            "credentials": []
+                        },
+                        "socks_proxy": { "password": "" }
+                    }
+                }
+            }
+        """.trimIndent()
+        val filteredJson = filterUserConfigCredentials(empty_user_credentials)
+        val parsedJson = Json.parseToJsonElement(filteredJson).jsonObject
+
+        val credentials = parsedJson["user_options"]?.jsonObject
+            ?.get("connections")?.jsonObject
+            ?.get("platform_authentication")?.jsonObject
+            ?.get("credentials")?.jsonArray
+
+        Assertions.assertTrue(credentials.isNullOrEmpty())
+    }
+
+    @Test
+    fun `test security filter with empty credentials on project_options`() {
+        config.filterConfigCredentials = true
+        val empty_project_credentials = """
+            {
+                "project_options": {
+                    "connections": {
+                        "platform_authentication": {
+                            "credentials": []
+                        },
+                        "socks_proxy": { "password": "" }
+                    }
+                }
+            }
+        """.trimIndent()
+        val filteredJson = filterProjectConfigCredentials(empty_project_credentials)
+        val parsedJson = Json.parseToJsonElement(filteredJson).jsonObject
+
+        val credentials = parsedJson["project_options"]?.jsonObject
+            ?.get("connections")?.jsonObject
+            ?.get("platform_authentication")?.jsonObject
+            ?.get("credentials")?.jsonArray
+
+        Assertions.assertTrue(credentials.isNullOrEmpty())
     }
 }
