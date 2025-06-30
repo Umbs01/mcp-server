@@ -67,7 +67,7 @@ fun filterUserConfigCredentials(jsonString: String): String {
         return Json.encodeToString(UserOptionsWrapper(user_options))
         
     } catch (e: Exception) {
-        return jsonString
+        throw RuntimeException("Failed to filter user config credentials", e)
     }
 }
 
@@ -94,7 +94,7 @@ fun filterProjectConfigCredentials(jsonString: String): String {
         
         return Json.encodeToString(project_config)
     } catch (e: Exception) {
-        return jsonString
+        throw RuntimeException("Failed to filter project config credentials", e)
     }
 }
 

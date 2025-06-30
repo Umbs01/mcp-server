@@ -55,35 +55,13 @@ class ConfigSecurityFilterTest {
             every { logToError(any<String>()) } returns Unit
         }
 
-        projectOptionString = """
-            {
-                "bambda": {},
-                "logger": {},
-                "organiser": {},
-                "project_options": {
-                    "connections": {
-                        "platform_authentication": {
-                            "credentials": [
-                                {
-                                    "username": "realuser",
-                                    "password": "realpass"
-                                }
-                            ]
-                        },
-                        "socks_proxy": {
-                            "username": "proxyuser",
-                            "password": "proxypass"
-                        }
-                    }
-                },
-                "proxy": {},
-                "repeater": {},
-                "sequencer": {},
-                "target": {}
-            }
-        """.trimIndent()
-        
-        usersOptionString = """
+        this.get_user_options_with_customizable_field()
+        this.get_project_options_with_customizable_field()
+        config = McpConfig(persistedObject, mockLogging)
+    }
+
+    fun get_user_options_with_customizable_field(username: String = "", password: String = ""): String {
+        this.usersOptionString = """
             {
                 "user_options": {
                     "bchecks": {},
@@ -91,12 +69,14 @@ class ConfigSecurityFilterTest {
                         "platform_authentication": {
                             "credentials": [
                                 {
-                                    "password": "realpass"
+                                    "username": "$username",
+                                    "password": "$password"
                                 }
                             ]
                         },
                         "socks_proxy": {
-                            "password": "proxypass"
+                            "username": "$username",
+                            "password": "$password"
                         }
                     },
                     "display": {},
@@ -109,12 +89,44 @@ class ConfigSecurityFilterTest {
                 }
             }
         """.trimIndent()
-        config = McpConfig(persistedObject, mockLogging)
+        return this.usersOptionString
+    }
+
+    fun get_project_options_with_customizable_field(username: String = "", password: String = ""): String {
+        this.projectOptionString = """
+            {
+                "bambda": {},
+                "logger": {},
+                "organiser": {},
+                "project_options": {
+                    "connections": {
+                        "platform_authentication": {
+                            "credentials": [
+                                {
+                                    "username": "$username",
+                                    "password": "$password"
+                                }
+                            ]
+                        },
+                        "socks_proxy": {
+                            "username": "$username",
+                            "password": "$password"
+                        }
+                    }
+                },
+                "proxy": {},
+                "repeater": {},
+                "sequencer": {},
+                "target": {}
+            }
+        """.trimIndent()
+       return this.projectOptionString
     }
 
     @Test
     fun `test security filter on project_options `() {
         config.filterConfigCredentials = true
+        projectOptionString = get_project_options_with_customizable_field("testuser", "testpass")
         val filteredProjectJson = filterProjectConfigCredentials(projectOptionString)
         val parsedJson = Json.parseToJsonElement(filteredProjectJson).jsonObject
 
@@ -140,6 +152,7 @@ class ConfigSecurityFilterTest {
     @Test
     fun `test security filter on user_options`() {
         config.filterConfigCredentials = true
+        usersOptionString = get_user_options_with_customizable_field("testuser", "testpass")
         val filteredUserJson = filterUserConfigCredentials(usersOptionString)
         val parsedJson = Json.parseToJsonElement(filteredUserJson).jsonObject
 
@@ -165,18 +178,7 @@ class ConfigSecurityFilterTest {
     @Test
     fun `test security filter with empty credentials on user_options`() {
         config.filterConfigCredentials = true
-        val empty_user_credentials = """
-            {
-                "user_options": {
-                    "connections": {
-                        "platform_authentication": {
-                            "credentials": []
-                        },
-                        "socks_proxy": { "password": "" }
-                    }
-                }
-            }
-        """.trimIndent()
+        val empty_user_credentials: String = get_user_options_with_customizable_field("", "")
         val filteredJson = filterUserConfigCredentials(empty_user_credentials)
         val parsedJson = Json.parseToJsonElement(filteredJson).jsonObject
 
@@ -185,24 +187,25 @@ class ConfigSecurityFilterTest {
             ?.get("platform_authentication")?.jsonObject
             ?.get("credentials")?.jsonArray
 
-        Assertions.assertTrue(credentials.isNullOrEmpty())
+        val socks_proxy = parsedJson["user_options"]?.jsonObject
+            ?.get("connections")?.jsonObject
+            ?.get("socks_proxy")?.jsonObject
+
+        credentials?.forEach { credential ->
+            val credentialObj = credential.jsonObject
+            Assertions.assertTrue(credentialObj["username"]?.jsonPrimitive?.content.isNullOrEmpty())
+            Assertions.assertEquals("*****", credentialObj["password"]?.jsonPrimitive?.content)
+        }
+        socks_proxy?.let {
+            Assertions.assertTrue(socks_proxy["username"]?.jsonPrimitive?.content.isNullOrEmpty())
+            Assertions.assertEquals("*****", socks_proxy["password"]?.jsonPrimitive?.content)
+        }
     }
 
     @Test
     fun `test security filter with empty credentials on project_options`() {
         config.filterConfigCredentials = true
-        val empty_project_credentials = """
-            {
-                "project_options": {
-                    "connections": {
-                        "platform_authentication": {
-                            "credentials": []
-                        },
-                        "socks_proxy": { "password": "" }
-                    }
-                }
-            }
-        """.trimIndent()
+        val empty_project_credentials = get_project_options_with_customizable_field("", "")
         val filteredJson = filterProjectConfigCredentials(empty_project_credentials)
         val parsedJson = Json.parseToJsonElement(filteredJson).jsonObject
 
@@ -211,6 +214,128 @@ class ConfigSecurityFilterTest {
             ?.get("platform_authentication")?.jsonObject
             ?.get("credentials")?.jsonArray
 
-        Assertions.assertTrue(credentials.isNullOrEmpty())
+        val socks_proxy = parsedJson["project_options"]?.jsonObject
+            ?.get("connections")?.jsonObject
+            ?.get("socks_proxy")?.jsonObject
+
+        credentials?.forEach { credential ->
+            val credentialObj = credential.jsonObject
+            Assertions.assertTrue(credentialObj["username"]?.jsonPrimitive?.content.isNullOrEmpty())
+            Assertions.assertEquals("*****", credentialObj["password"]?.jsonPrimitive?.content)
+        }
+        socks_proxy?.let {
+            Assertions.assertTrue(socks_proxy["username"]?.jsonPrimitive?.content.isNullOrEmpty())
+            Assertions.assertEquals("*****", socks_proxy["password"]?.jsonPrimitive?.content)
+        }
+    }
+
+    @Test
+    fun `test security filter with malformed Json on user_options`() {
+        config.filterConfigCredentials = true
+        val malformedJson = """
+        {
+            "user_options": {
+                "bchecks": {},
+                "connections": {
+                    "platform_authentication": {
+                        "credentials": []
+                    },
+                    "socks_proxy": { "password": "" 
+                },
+                "display": {},
+                "extender": {},
+                "intruder": {},
+                "misc": {},
+                "proxy": {},
+                "repeater": {},
+                "ssl": {}
+            }
+        }
+        """.trimIndent()
+        val exception = Assertions.assertThrows(RuntimeException::class.java) {
+            filterUserConfigCredentials(malformedJson)
+        }
+        Assertions.assertEquals("Failed to filter user config credentials", exception.message)
+        Assertions.assertNotNull(exception.cause)
+    }
+
+    @Test
+    fun `test security filter with malformed Json on project_options`() {
+        config.filterConfigCredentials = true
+        val malformedJson = """
+        {
+            "bambda": {},
+            "logger": {},
+            "organiser": {},
+            "project_options": {
+                "connections": {
+                    "platform_authentication": {
+                        "credentials": []
+                    },
+                    "socks_proxy": { "password": "" }
+                }
+            },
+            "proxy": {},
+            "repeater": {},
+            "sequencer": {},
+            "target": {}
+        
+        """.trimIndent()
+        val exception = Assertions.assertThrows(RuntimeException::class.java) {
+            filterProjectConfigCredentials(malformedJson)
+        }
+        Assertions.assertEquals("Failed to filter project config credentials", exception.message)
+        Assertions.assertNotNull(exception.cause)
+    }
+
+    @Test
+    fun `test security filter with username but no password on user_options`() {
+        config.filterConfigCredentials = true
+        val jsonWithUsernameOnly = get_user_options_with_customizable_field("testuser", "")
+        val filteredJson = filterUserConfigCredentials(jsonWithUsernameOnly)
+        val parsedJson = Json.parseToJsonElement(filteredJson).jsonObject
+
+        val credentials = parsedJson["user_options"]?.jsonObject
+            ?.get("connections")?.jsonObject
+            ?.get("platform_authentication")?.jsonObject
+            ?.get("credentials")?.jsonArray
+
+        val socks_proxy = parsedJson["user_options"]?.jsonObject
+            ?.get("connections")?.jsonObject
+            ?.get("socks_proxy")?.jsonObject
+
+        credentials?.forEach { credential ->
+            val credentialObj = credential.jsonObject
+            Assertions.assertEquals("*****", credentialObj["password"]?.jsonPrimitive?.content)
+        }
+
+        socks_proxy?.let {
+            Assertions.assertEquals("*****", socks_proxy["password"]?.jsonPrimitive?.content)
+        }
+    }
+
+    @Test
+    fun `test security filter with username but no password on project_options`() {
+        config.filterConfigCredentials = true
+        val jsonWithUsernameOnly = get_project_options_with_customizable_field("testuser", "")
+        val filteredJson = filterProjectConfigCredentials(jsonWithUsernameOnly)
+        val parsedJson = Json.parseToJsonElement(filteredJson).jsonObject
+
+        val credentials = parsedJson["project_options"]?.jsonObject
+            ?.get("connections")?.jsonObject
+            ?.get("platform_authentication")?.jsonObject
+            ?.get("credentials")?.jsonArray
+
+        val socks_proxy = parsedJson["project_options"]?.jsonObject
+            ?.get("connections")?.jsonObject
+            ?.get("socks_proxy")?.jsonObject
+
+        credentials?.forEach { credential ->
+            val credentialObj = credential.jsonObject
+            Assertions.assertEquals("*****", credentialObj["password"]?.jsonPrimitive?.content)
+        }
+        socks_proxy?.let {
+            Assertions.assertEquals("*****", socks_proxy["password"]?.jsonPrimitive?.content)
+        }
     }
 }
