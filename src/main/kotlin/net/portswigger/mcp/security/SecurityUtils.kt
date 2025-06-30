@@ -10,6 +10,10 @@ data class SecurityConfig(
     val user_options: Map<String, Map<String, JsonElement>>
 )
 
+private const val USER_OPTIONS = "user_options"
+private const val PROJECT_OPTIONS = "project_options"
+private const val CONNECTIONS = "connections"
+
 /**
  * Finds the Burp Suite main frame or the largest available frame as fallback
  */
@@ -28,56 +32,33 @@ fun findBurpFrame(): Frame? {
 }
 
 fun filterUserConfigCredentials(jsonString: String): String {
-    return try {
-        val jsonObject = Json.parseToJsonElement(jsonString).jsonObject
-        val userOptions = jsonObject["user_options"]?.jsonObject ?: return jsonString
-        val connections = userOptions["connections"]?.jsonObject ?: return jsonString
-        
-        val filteredConnections = connections.mapValues { (key: String, value: JsonElement) ->
-            when (key) {
-                "platform_authentication" -> filterPlatformAuth(value)
-                "socks_proxy" -> filterSocksProxy(value)
-                else -> value
-            }
-        }
-        val updatedUserOptions = userOptions.toMutableMap().apply {
-            this["connections"] = JsonObject(filteredConnections)
-        }
-        val updatedJson = jsonObject.toMutableMap().apply {
-            this["user_options"] = JsonObject(updatedUserOptions)
-        }
-        Json.encodeToString(JsonObject(updatedJson))
-
-    } catch (e: Exception) {
-        jsonString
-    }
+    return filterConfigCredentials(jsonString, USER_OPTIONS)
 }
 
 fun filterProjectConfigCredentials(jsonString: String): String {
+    return filterConfigCredentials(jsonString, PROJECT_OPTIONS)
+}
+
+private fun filterConfigCredentials(jsonString: String, optionsKey: String): String {
     return try {
-        val jsonObject = Json.parseToJsonElement(jsonString).jsonObject
-        val projectOptions = jsonObject["project_options"]?.jsonObject ?: return jsonString
-        val connections = projectOptions["connections"]?.jsonObject ?: return jsonString
+        val json = Json.parseToJsonElement(jsonString).jsonObject
+        val options = json[optionsKey]?.jsonObject ?: return jsonString
+        val connections = options[CONNECTIONS]?.jsonObject ?: return jsonString
         
-        val filteredConnections = connections.mapValues { (key: String, value: JsonElement) ->
+        val filteredConnections = connections.mapValues { (key, value) ->
             when (key) {
                 "platform_authentication" -> filterPlatformAuth(value)
                 "socks_proxy" -> filterSocksProxy(value)
                 else -> value
             }
         }
-        val updatedProjectOptions = JsonObject(
-            projectOptions.toMutableMap().apply {
-                this["connections"] = JsonObject(filteredConnections)
-            }
-        )
-        val updatedJson = JsonObject(
-            jsonObject.toMutableMap().apply {
-                this["project_options"] = updatedProjectOptions
-            }
-        )
-        Json.encodeToString(updatedJson)
-
+        
+        val updatedJson = json.toMutableMap()
+        val updatedOptions = options.toMutableMap()
+        updatedOptions[CONNECTIONS] = JsonObject(filteredConnections)
+        updatedJson[optionsKey] = JsonObject(updatedOptions)
+        
+        Json.encodeToString(JsonObject(updatedJson))
     } catch (e: Exception) {
         jsonString
     }
