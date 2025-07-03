@@ -13,7 +13,7 @@ data class UserOptionsWrapper (
 @Serializable
 data class UserOptions (
     var bchecks: JsonObject,
-    var connections: JsonObject,
+    var connections: Connections,
     var display: JsonObject,
     var extender: JsonObject,
     var intruder: JsonObject,
@@ -24,16 +24,40 @@ data class UserOptions (
 )
 
 @Serializable
-data class ProjectOptions (
+data class ProjectOptionsWrapper (
     var bambda: JsonObject,
     var logger: JsonObject,
-    var organiser: JsonObject,
-    var project_options: JsonObject,
+    var project_options: ProjectOptions,
     var proxy: JsonObject,
     var repeater: JsonObject,
     var sequencer: JsonObject,
     var target: JsonObject
 )
+
+@Serializable
+data class ProjectOptions (
+    var connections: Connections,
+    var dns: JsonObject,
+    var http: JsonObject,
+    var misc: JsonObject,
+    var sessions: JsonObject,
+    var ssl: JsonObject
+)
+
+@Serializable
+data class Connections (
+    var platform_authentication: PlatformAuth,
+    var socks_proxy: JsonObject,
+    var upstream_proxy: JsonObject
+)
+
+@Serializable
+data class PlatformAuth (
+    var credentials: JsonArray,
+    var do_platform_authentication: Boolean,
+    var prompt_on_authentication_failure: Boolean
+)
+
 
 /**
  * Finds the Burp Suite main frame or the largest available frame as fallback
@@ -54,18 +78,18 @@ fun findBurpFrame(): Frame? {
 
 fun filterUserConfigCredentials(jsonString: String): String {
     try {
-        var wrapper = Json.decodeFromString<UserOptionsWrapper>(jsonString)
-        var user_options = wrapper.user_options
-        
-        user_options.connections = JsonObject(user_options.connections.mapValues { (key, value) ->
-            when (key) {
-                "platform_authentication" -> filterPlatformAuth(value)
-                "socks_proxy" -> filterSocksProxy(value)
-                else -> value
-            }
-        })
-        return Json.encodeToString(UserOptionsWrapper(user_options))
-        
+        val json = Json { ignoreUnknownKeys = true }
+        val userOptionWrapper = json.decodeFromString<UserOptionsWrapper>(jsonString)
+        val userOptions = userOptionWrapper.user_options
+
+        val connections = userOptions.connections
+        val credentials = connections.platform_authentication.credentials
+        val socks_proxy = connections.socks_proxy
+
+        connections.platform_authentication.credentials = filterPlatformAuth(credentials)   
+        connections.socks_proxy = filterSocksProxy(socks_proxy) as JsonObject
+
+        return json.encodeToString(userOptionWrapper)
     } catch (e: Exception) {
         throw RuntimeException("Failed to filter user config credentials", e)
     }
@@ -73,37 +97,25 @@ fun filterUserConfigCredentials(jsonString: String): String {
 
 fun filterProjectConfigCredentials(jsonString: String): String {
     try {
-        var project_config = Json.decodeFromString<ProjectOptions>(jsonString)
-        val connections = project_config.project_options["connections"]?.jsonObject
+        val json = Json { ignoreUnknownKeys = true }
+        val projectOptionsWrapper = json.decodeFromString<ProjectOptionsWrapper>(jsonString)
+        val options = projectOptionsWrapper.project_options
 
-        if (connections != null) {
-            val filtered = JsonObject(connections.mapValues { (key, value) ->
-                when (key) {
-                    "platform_authentication" -> filterPlatformAuth(value)
-                    "socks_proxy" -> filterSocksProxy(value)
-                    else -> value
-                }
-            })
-            
-            project_config.project_options = JsonObject(
-                project_config.project_options.toMutableMap().apply {
-                    this["connections"] = filtered
-                }
-            )
-        }
-        
-        return Json.encodeToString(project_config)
+        val connections = options.connections
+        val credentials = connections.platform_authentication.credentials
+        val socks_proxy = connections.socks_proxy
+        connections.platform_authentication.credentials = filterPlatformAuth(credentials)
+        connections.socks_proxy = filterSocksProxy(socks_proxy) as JsonObject
+
+        return json.encodeToString(projectOptionsWrapper)
     } catch (e: Exception) {
         throw RuntimeException("Failed to filter project config credentials", e)
     }
 }
 
-private fun filterPlatformAuth(value: JsonElement): JsonElement {
-    val obj = value.jsonObject
-    val credentials = obj["credentials"]?.jsonArray
-
-    val filteredCredentials = credentials?.map { credentialElement ->
-        val credentialObj = credentialElement.jsonObject
+private fun filterPlatformAuth(array: JsonArray): JsonArray {
+    return JsonArray(array.map { element -> 
+        val credentialObj = element.jsonObject
         JsonObject(
             credentialObj.mapValues { (key, value) ->
                 when (key) {
@@ -112,9 +124,6 @@ private fun filterPlatformAuth(value: JsonElement): JsonElement {
                 }
             }
         )
-    }
-    return JsonObject(obj.toMutableMap().apply {
-        this["credentials"] = JsonArray(filteredCredentials ?: emptyList())
     })
 }
 
