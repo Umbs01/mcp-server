@@ -62,63 +62,85 @@ class ConfigSecurityFilterTest {
 
     fun get_user_options_with_customizable_field(username: String = "", password: String = ""): String {
         this.usersOptionString = """
-            {
-                "user_options": {
-                    "bchecks": {},
-                    "connections": {
-                        "platform_authentication": {
-                            "credentials": [
-                                {
-                                    "username": "$username",
-                                    "password": "$password"
-                                }
-                            ]
-                        },
-                        "socks_proxy": {
-                            "username": "$username",
-                            "password": "$password"
-                        }
+        {
+            "user_options": {
+                "bchecks": {},
+                "connections": {
+                    "platform_authentication": {
+                        "credentials": [
+                            {
+                                "username": "$username",
+                                "password": "$password"
+                            }
+                        ],
+                        "do_platform_authentication": false,
+                        "prompt_on_authentication_failure": false
                     },
-                    "display": {},
-                    "extender": {},
-                    "intruder": {},
-                    "misc": {},
-                    "proxy": {},
-                    "repeater": {},
-                    "ssl": {}
-                }
+                    "socks_proxy": {
+                        "username": "$username",
+                        "password": "$password"
+                    },
+                    "upstream_proxy": {
+                        "servers": []
+                    }
+                },
+                "display": {},
+                "extender": {},
+                "intruder": {},
+                "misc": {},
+                "proxy": {},
+                "repeater": {},
+                "ssl": {}
             }
+        }
         """.trimIndent()
         return this.usersOptionString
     }
 
     fun get_project_options_with_customizable_field(username: String = "", password: String = ""): String {
         this.projectOptionString = """
-            {
-                "bambda": {},
-                "logger": {},
-                "organiser": {},
-                "project_options": {
-                    "connections": {
-                        "platform_authentication": {
-                            "credentials": [
-                                {
-                                    "username": "$username",
-                                    "password": "$password"
-                                }
-                            ]
-                        },
-                        "socks_proxy": {
-                            "username": "$username",
-                            "password": "$password"
-                        }
+        {
+            "bambda": {},
+            "logger": {},
+            "organiser": {},
+            "project_options": {
+                "connections": {
+                    "out_of_scope_requests": {},
+                    "platform_authentication": {
+                        "credentials": [
+                            {
+                                "username": "$username",
+                                "password": "$password"
+                            }
+                        ],
+                        "do_platform_authentication": false,
+                        "prompt_on_authentication_failure": false,
+                        "use_user_options": true
+                    },
+                    "socks_proxy": {
+                        "username": "$username",
+                        "password": "$password"
+                    },
+                    "timeouts": {
+                        "connect_timeout": 5000,
+                        "read_timeout": 5000
+                    },
+                    "upstream_proxy": {
+                        "servers": [],
+                        "use_user_options": true
                     }
                 },
-                "proxy": {},
-                "repeater": {},
-                "sequencer": {},
-                "target": {}
-            }
+                "dns": {},
+                "http": {},
+                "misc": {},
+                "sessions": {},
+                "ssl": {}
+            },
+            "proxy": {},
+            "repeater": {},
+            "sequencer": {},
+            "target": {}
+        }
         """.trimIndent()
        return this.projectOptionString
     }
