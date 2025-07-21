@@ -7,7 +7,7 @@ import kotlinx.serialization.json.*
 
 @Serializable
 data class SecurityConfig(
-    val user_options: Map<String, Map<String, JsonElement>>
+    val options: Map<String, Map<String, JsonElement>>
 )
 
 /**
@@ -28,47 +28,35 @@ fun findBurpFrame(): Frame? {
 }
 
 fun filterConfigCredentials(json: String): String {
-    try {
-        val jsonObj = Json.parseToJsonElement(json).jsonObject
-        val filteredElement = filterJsonObject(jsonObj)
-        return Json.encodeToString(filteredElement) 
+    return try {
+        val jsonElement = Json.parseToJsonElement(json)
+        val filteredElement = filterJsonElement(jsonElement)
+        Json.encodeToString(filteredElement)
     } catch (e: Exception) {
-        return json
+        throw RuntimeException("Failed to filter credentials", e)
     }
 }
 
-fun filterJsonObject(obj: JsonObject): JsonObject {
-    val filteredMap = mutableMapOf<String, JsonElement>()
+private fun filterJsonElement(element: JsonElement): JsonElement {
+    return when (element) {
+        is JsonObject -> filterJsonObject(element)
+        is JsonArray -> filterJsonArray(element)
+        else -> element
+    }
+}
 
-    for ((key, value) in obj) {
-        filteredMap[key] = when {
-            value is JsonPrimitive && value.isString && isCredential(key) ->
+private fun filterJsonObject(obj: JsonObject): JsonObject {
+    val filteredMap = obj.mapValues { (key, value) ->
+        when {
+            value is JsonPrimitive && value.isString && key == "password" -> 
                 JsonPrimitive("*****")
-            value is JsonObject -> filterJsonObject(value)
-            value is JsonArray -> filterJsonArray(value)
-            else -> value
+            else -> filterJsonElement(value)
         }
     }
     return JsonObject(filteredMap)
 }
 
-fun filterJsonArray(array: JsonArray): JsonArray {
-    val filteredList = array.map { element ->
-        when (element) {
-            is JsonObject -> filterJsonObject(element)
-            is JsonArray -> filterJsonArray(element)
-            else -> element
-        }
-    }
+private fun filterJsonArray(array: JsonArray): JsonArray {
+    val filteredList = array.map { element -> filterJsonElement(element) }
     return JsonArray(filteredList)
-}
-
-fun isCredential(key: String): Boolean {
-    val credentialKeywords = listOf(
-        "password",
-        "username"
-    )
-    return credentialKeywords.any { keyword ->
-        key.lowercase().contains(keyword)
-    }
 }
